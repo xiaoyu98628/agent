@@ -21,7 +21,7 @@ def find_user(user_id: Optional[str] = None) -> Dict[str, Any]:
 ```
 
 - 领域实体：`@dataclass(frozen=True, slots=True)`，不含 ORM
-- 仓储接口：`typing.Protocol`，实现在 `infrastructure/persistence/repositories/`
+- 仓储接口：`typing.Protocol`，实现在 `infrastructure/storage/` 或对应 adapter
 - HTTP DTO：Pydantic `BaseModel`，放 `interfaces/http/schemas/`
 
 ## import
@@ -38,7 +38,7 @@ from app.database.DatabaseConfig import async_connections
 ```
 
 - 禁止 `python config/xxx.py`，包内入口用 `python -m`（如 `python -m app.main`）
-- 路径常量放项目根 `paths.py`（`BASE_DIR`、`ENV_FILE`、`DATABASE_DIR`）
+- 路径常量放项目根 `paths.py`（`BASE_DIR`、`ENV_FILE`、`STORAGE_DIR`）
 
 ## `__init__.py`
 

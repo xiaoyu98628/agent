@@ -1,7 +1,7 @@
 [project]
 name = "agent"
-version = "0.1.0"
-description = "Agent — FastAPI DDD backend with config, middleware, unified response, and database infrastructure."
+version = "0.2.0"
+description = "Agent runtime — personal CLI + online API service powered by LangChain."
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [
@@ -10,22 +10,30 @@ authors = [
 dependencies = [
     "fastapi>=0.136.3",
     "uvicorn>=0.48.0",
-
-    "sqlalchemy[asyncio]>=2.0.50",
-    "alembic>=1.18.4",
-
-    "aiomysql>=0.3.2", # mysql async
-    "aiosqlite>=0.22.1", # sqlite async
-    "asyncpg>=0.31.0", # postgresql async
-
-    "pymysql>=1.1.0", # mysql sync (migrations)
-    "psycopg2-binary>=2.9.0", # postgresql sync (migrations)
-
     "pydantic-settings>=2.14.1",
     "pydantic>=2.13.4",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-openrouter>=0.1.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-ollama>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
+    "aiosqlite>=0.22.1",
+    "prompt-toolkit>=3.0.52",
+    "rich>=14.0.0",
 ]
 
+[project.scripts]
+agent = "app.interfaces.cli.main:main"
+agent-gateway = "app.interfaces.gateway.main:main"
+
 [project.optional-dependencies]
+gateway = [
+    "python-telegram-bot>=21.0",
+]
+test = [
+    "websockets>=16.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
@@ -33,14 +41,8 @@ dev = [
     "ruff>=0.5.0",
 ]
 
-# 目标 Python 版本
 [tool.ty.environment]
 python-version = "3.14"
-
-# 镜像源
-#[[tool.uv.index]]
-#url = "https://mirrors.cloud.tencent.com/pypi/simple"
-#default = true
 
 [tool.black]
 line-length = 150

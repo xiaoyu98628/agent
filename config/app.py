@@ -1,3 +1,4 @@
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,7 +7,6 @@ from config.settings import BASE_SETTINGS_CONFIG
 
 
 class AppConfig(BaseSettings):
-
     model_config = SettingsConfigDict(
         **BASE_SETTINGS_CONFIG,
         env_prefix="APP_",
@@ -16,7 +16,7 @@ class AppConfig(BaseSettings):
     env: str = Field(default="dev", description="环境")
     debug: bool = Field(default=True, description="调试模式")
     port: int = Field(default=8000, description="端口")
-
+    deployment_mode: Literal["personal", "server"] = Field(default="personal", description="部署模式：personal 本地 / server 线上")
     service_code: str = Field(default="001", description="三位服务码，如 001、002、010。")
 
     @field_validator("service_code")

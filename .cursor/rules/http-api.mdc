@@ -1,5 +1,5 @@
 ---
-description: HTTP 接口层补充约定（路由、Presenter、Deps、中间件）
+description: HTTP 接口层约定（Agent API）
 globs: app/interfaces/http/**/*
 alwaysApply: false
 ---
@@ -10,36 +10,64 @@ alwaysApply: false
 
 ```
 main.py → routers/register.py → api/router (/api) → v1/router (/v1) → endpoints/
-                              → ws/router (/ws) → v1/router
+                              → ws/router (/ws) → v1/router → endpoints/
 ```
 
-- REST 前缀：`/api/v1/...`；WebSocket：`/ws/v1/...`
-- 路由保持**薄**：Depends 注入 Service → Presenter 转 DTO → `JsonResponse`
-- 不在 endpoint 内写 SQLAlchemy 查询或 Entity 字段映射
+| 前缀 | 模块 |
+|------|------|
+| `/api/v1/chat` | 对话 REST |
+| `/api/v1/documents` | 文档管理 |
+| `/api/v1/knowledge-bases` | 知识库 |
+| `/api/v1/skills` | 技能 |
+| `/ws/v1/chat` | 流式对话 WebSocket |
+
+## 两种响应形态
+
+### REST 管理接口
+
+使用 `JsonResponse` + Presenter，路由保持薄：
+
+```python
+service: ChatService = Depends(get_chat_service)
+return JsonResponse.success(data=to_response(conversation))
+```
+
+### 流式对话
+
+WebSocket 地址：`/ws/v1/chat`
+
+客户端发送一条 JSON（同 REST `ChatRequest`），服务端推送：
+
+```json
+{"event": "start", "data": {"provider": "...", "model": "...", "trace_id": "..."}}
+{"event": "delta", "data": {"content": "..."}}
+{"event": "done", "data": {"reply": "...", "model": {...}}}
+{"event": "error", "data": {"message": "...", "trace_id": "..."}}
+```
+
+endpoint 内不直接调用 LangGraph / LangChain，只调 `ChatService.stream_message`。
 
 ## Schemas / Presenter / Deps
 
 | 目录 | 职责 |
 |------|------|
-| `schemas/requests/` | 入参 Pydantic 模型（Query / Body） |
+| `schemas/requests/` | 入参 Pydantic 模型 |
 | `schemas/responses/` | 出参 Pydantic 模型 |
-| `presenters/` | Entity / PageResult → Response DTO |
-| `deps/` | 返回 application Service 实例 |
-
-```python
-# endpoints/user.py 典型模式
-service: UserService = Depends(get_user_service)
-return JsonResponse.success(data=to_response(user))
-```
+| `presenters/` | Entity → Response DTO |
+| `deps/` | 注入 application 服务 |
 
 ## 领域错误映射
 
-- 新模块异常：在 `handlers/domain_error.py` 的 `_resolve_error_code` 追加 `isinstance` 分支
-- 领域异常继承 `DomainError`，映射层决定 `ErrorCode` 与 HTTP 状态
+- 领域异常继承 `app.domain.exceptions.DomainError`
+- 在 `handlers/domain_error.py` 的 `_resolve_error_code` 追加映射
+- 子模块异常放在 `domain/{module}/exceptions.py`
 
 ## 中间件注意
 
-修改 `middleware/register.py` 时：
+- `RequestScope` 须在 `RequestLog` **外侧**（后注册）
+- `CorsMiddleware` 须在最外层
 
-- `RequestScope` 须在 `RequestLog` **外侧**（后注册），否则 trace_id 缺失
-- `CorsMiddleware` 须在最外层，异常 handler 直接返回时也要带 CORS 头
+## 禁止
+
+- endpoint 内直接调用 LangGraph / LangChain
+- endpoint 内写工具实现或向量检索逻辑

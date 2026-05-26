@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
-from app.domain.user.exceptions import DomainError
+from app.domain.exceptions import DomainError
 from app.interfaces.http.handlers.domain_error import to_error_response
 
 

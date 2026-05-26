@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.interfaces.http.ws.v1.endpoints import chat_stream
+
 ws_v1_router = APIRouter(prefix="/v1")
 
-# WebSocket endpoints：在 ws/v1/endpoints/ 增加模块后于此挂载。
+ws_v1_router.include_router(chat_stream.router)

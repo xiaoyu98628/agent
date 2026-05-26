@@ -1,16 +1,16 @@
 # agent
 
-基于 FastAPI 的 **DDD** 后端项目：配置管理、异步数据库、领域分层、统一 API 响应、日志与 Alembic 迁移。
+**Agent-only 运行时**：个人 Agent + 线上 API 统一服务。FastAPI 暴露 HTTP/WebSocket，LangGraph 负责 Agent 编排，支持 RAG、Skills、Memory。
 
-> **当前状态：v0.1.0** — User 模块已打通全链路（domain → application → HTTP → persistence）；全局异常 handler、测试与 CI 待补全。
+> **当前状态：v0.2.0** — 对话、会话、工具、CLI、RAG、Skills、Memory、Telegram Gateway 已可用。
 
 ## 文档导航
 
 | 读者 | 文档 |
 |------|------|
-| 新成员 / 运维 | 本文 README（安装、配置、迁移） |
+| 开发者 | 本文 README |
 | AI 助手 | [AGENTS.md](AGENTS.md) + [.cursor/rules/](.cursor/rules/) |
-| 编码规范 | `.cursor/rules/python.mdc`、`scaffold.mdc`、`http-api.mdc` |
+| 环境变量 | `.env.sample` |
 
 ## 技术栈
 
@@ -18,303 +18,305 @@
 |------|------|
 | 语言 | Python 3.14+ |
 | Web | FastAPI + Uvicorn |
+| Agent | LangGraph / LangChain（待接入） |
 | 配置 | pydantic-settings |
-| ORM | SQLAlchemy 2.x（asyncio） |
-| 数据库驱动 | aiomysql / aiosqlite / asyncpg |
+| 向量 | pgvector / Qdrant（待接入） |
 | 包管理 | [uv](https://docs.astral.sh/uv/) |
 
 ## 快速开始
 
-### 1. 环境准备
-
 ```bash
 uv sync
 cp .env.sample .env
-```
-
-### 2. 启动服务
-
-```bash
-uv run python -m app.main
-# 或
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uv run python -m app.main          # HTTP/WS 服务
+uv run python -m app.interfaces.cli # 个人 CLI（交互式）
+uv sync --extra gateway              # 安装 Telegram 依赖
+uv run python -m app.interfaces.gateway # Telegram Gateway（需配置 BOT_TOKEN）
 ```
 
 - 健康检查：[http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
-- User API 示例：[http://127.0.0.1:8000/api/v1/users](http://127.0.0.1:8000/api/v1/users)
-- OpenAPI 文档：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- OpenAPI：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 ## 架构概览
 
 ```mermaid
 flowchart LR
-    HTTP["interfaces/http"] --> APP["application"]
-    APP --> DOM["domain"]
-    INFRA["infrastructure"] -.->|实现仓储| DOM
-    INFRA --> DB[(Database)]
+    IF["interfaces\nHTTP / WS / CLI / Gateway"] --> APP["application\nchat / agent / rag"]
+    APP --> DOM["domain\nworkspace / conversation / …"]
+    INFRA["infrastructure\nllm / tools / vector / storage"] -.-> APP
 ```
 
-**依赖方向**：`interfaces → application → domain`；`infrastructure` 实现 domain 接口，ORM 位于 `persistence/models/`。
+**依赖方向**：`interfaces → application → domain`；`infrastructure` 为 application 提供适配器。
 
 ## 目录结构
 
 ```
 agent/
-├── paths.py                         # BASE_DIR、ENV_FILE、DATABASE_DIR
-├── AGENTS.md                        # AI 助手 onboarding
-├── config/                          # 配置（各域 *Config + config() 聚合）
-│   ├── settings.py                  # BASE_SETTINGS_CONFIG 公共项
-│   ├── app.py / database.py / logging.py / cors.py
-│   └── config.py                    # config() 入口
+├── config/
+│   ├── app.py              # deployment_mode
+│   ├── llm.py              # 模型、API Key
+│   ├── agent.py            # 工具开关、迭代上限
+│   └── rag.py              # chunk、top_k、向量库
 ├── app/
-│   ├── main.py                      # FastAPI 入口 + lifespan
-│   ├── domain/                      # 领域：实体、枚举、异常、仓储 Protocol
-│   │   └── user/                    # 示例模块
-│   ├── application/                 # 应用层：用例 Service
-│   │   ├── user/
-│   │   └── support/                 # 分页、ULID 等横切工具
-│   ├── interfaces/http/             # HTTP 接口层
-│   │   ├── api/v1/endpoints/        # REST 路由（/api/v1/...）
-│   │   ├── ws/v1/                   # WebSocket（待扩展）
-│   │   ├── deps/                    # FastAPI Depends 注入
-│   │   ├── handlers/                # 异常 handler
-│   │   ├── middleware/              # 中间件
-│   │   ├── presenters/              # Entity → Response DTO
-│   │   ├── schemas/                 # Request / Response Pydantic 模型
-│   │   ├── support/response/        # JsonResponse + 响应码表
-│   │   └── routers/register.py      # 路由总注册
-│   └── infrastructure/
-│       ├── context/                 # RequestScope / trace_id
-│       ├── database/                # 连接管理、SessionProvider
-│       ├── logging/                 # LogManager
-│       └── persistence/             # ORM Model、仓储实现、registry
-└── database/                        # Alembic 迁移
-    ├── alembic.ini
-    └── migrations/
+│   ├── domain/
+│   │   ├── workspace/      # 租户边界
+│   │   ├── conversation/   # 会话、消息
+│   │   ├── document/       # 文档、分块
+│   │   ├── knowledge/      # 知识库
+│   │   ├── skill/          # 技能
+│   │   └── memory/         # 长期记忆
+│   ├── application/
+│   │   ├── agent/          # LangGraph 编排
+│   │   ├── rag/            # 入库、检索
+│   │   └── chat/           # 对话用例
+│   ├── infrastructure/
+│   │   ├── llm/            # ChatModel
+│   │   ├── vector/         # 向量库
+│   │   ├── document/       # 文档 loader
+│   │   ├── tools/          # web、file、terminal…
+│   │   ├── storage/        # 本地 / S3
+│   │   └── sandbox/        # 代码隔离
+│   └── interfaces/
+│       ├── http/           # REST + WS
+│       ├── cli/            # 个人模式
+│       └── gateway/        # 消息平台（后期）
+└── storage/                # 运行时数据（gitignore）
 ```
 
-## 新增业务模块
+## 部署模式
 
-以 **User** 为模板，完整步骤见 [AGENTS.md](AGENTS.md#新增-rest-模块清单)。核心流程：
+| 模式 | 环境变量 | 说明 |
+|------|----------|------|
+| 个人 | `APP_DEPLOYMENT_MODE=personal` | 本地 CLI/API，全工具 |
+| 线上 | `APP_DEPLOYMENT_MODE=server` | API Key 鉴权，沙箱工具 |
 
-1. 在 `domain/{name}/` 定义实体、异常与 `Repository` Protocol
-2. 在 `infrastructure/persistence/` 实现 Model 与仓储，并在 `registry.py` 注册
-3. 在 `application/{name}/service.py` 编写用例（`SessionProvider` 管理事务）
-4. 在 `interfaces/http/` 添加 schemas、presenter、deps、endpoint，并挂载到 `api/v1/router.py`
-5. 在 `handlers/domain_error.py` 映射领域异常 → `ErrorCode`
-6. 执行 Alembic 生成并应用迁移
-
-## 配置说明
-
-环境变量模板见 [`.env.sample`](.env.sample)：
-
-| 前缀 | 模块 | 说明 |
-|------|------|------|
-| `APP_` | `config/app.py` | 应用名、环境、调试、端口、**服务码**（三位数字） |
-| `DB_` | `config/database.py` | 默认连接名、连接池、各命名连接参数（不含 URL） |
-| `LOG_` | `config/logging.py` | 级别、驱动、JSON 格式、轮转 |
-| `CORS_` | `config/cors.py` | 跨域策略 |
-
-代码中读取配置：
+## 配置
 
 ```python
 from config.config import config
-
 configure = config()
-configure.app.name
-configure.database.connection
 ```
 
-各域配置共享 `config/settings.py` 中的 `BASE_SETTINGS_CONFIG`，再设置各自的 `env_prefix`：
+| 前缀 | 模块 | 说明 |
+|------|------|------|
+| `APP_` | `config/app.py` | 应用、端口、`deployment_mode` |
+| `LLM_` | `config/llm.py` | 模型、API Key |
+| `AGENT_` | `config/agent.py` | 迭代上限、toolset |
+| `RAG_` | `config/rag.py` | 分块、向量库 |
+| `MEMORY_` | `config/memory.py` | 长期记忆上限、分隔符 |
+| `SKILLS_` | `config/memory.py` | Skills 目录开关 |
+| `LOG_` | `config/logging.py` | 日志 |
+| `CORS_` | `config/cors.py` | 跨域 |
 
-```python
-from pydantic_settings import SettingsConfigDict
-from config.settings import BASE_SETTINGS_CONFIG
+## API 路由
 
-model_config = SettingsConfigDict(**BASE_SETTINGS_CONFIG, env_prefix="APP_")
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/agent/tools` | 当前可用工具列表 |
+| `POST` | `/api/v1/chat` | 发送消息（`conversation_id` 可选） |
+| `GET` | `/api/v1/chat/models/options` | 静态可选模型列表 |
+| `POST` | `/api/v1/conversations` | 创建会话 |
+| `GET` | `/api/v1/conversations` | 会话列表 |
+| `GET` | `/api/v1/conversations/{id}` | 会话详情 + 消息 |
+| `DELETE` | `/api/v1/conversations/{id}` | 删除会话 |
+| `GET` | `/api/v1/skills` | 技能列表 |
+| `GET` | `/api/v1/skills/{name}` | 技能详情 |
+| `PUT` | `/api/v1/skills/{name}` | 创建或更新技能 |
+| `GET` | `/api/v1/memory` | 记忆快照（memory + user） |
+| `POST` | `/api/v1/memory/entries` | 新增记忆条目 |
+| `DELETE` | `/api/v1/memory/entries/{id}` | 删除记忆条目 |
+| `WS` | `/ws/v1/chat` | 流式对话（JSON 事件） |
+
+### POST /api/v1/chat 示例
+
+```json
+{
+  "message": "你好",
+  "conversation_id": "可选，不传则自动创建",
+  "model": {
+    "provider": "zhipu",
+    "model": "glm-4.7"
+  }
+}
 ```
 
-## 开发约定
+模型优先级：**请求 `model` > 会话绑定 model > config 默认（`LLM_PROVIDER` / `LLM_MODEL`）**。
 
-项目根目录 [.cursor/rules/](.cursor/rules/) 供 AI 与团队统一遵循：
+有 `conversation_id` 时从 SQLite 加载历史，忽略请求里的 `history`。
 
-| 规则文件 | 范围 | 内容 |
-|----------|------|------|
-| `python.mdc` | 全局 | Python 3.14+ 语法、显式导入、`__init__.py` 不做 re-export、Session |
-| `scaffold.mdc` | 全局 | DDD 分层、配置、响应码、日志、路由、数据库、当前进度 |
-| `http-api.mdc` | `interfaces/http/**` | Presenter/Deps 模式、中间件顺序、领域异常映射 |
-
-核心原则：
-
-- 新建包目录添加**空** `__init__.py`，禁止 re-export
-- 从定义所在模块显式导入，例如 `from config.database import DatabaseConfig`
-- 配置公共项放 `config/settings.py`，聚合放 `config/config.py`
-- 包内模块用 `python -m` 运行，避免 `python config/xxx.py` 导致包名冲突
-
-## 数据库连接
-
-设计参考 Laravel `Illuminate\Database`：配置层只定义 `connections`，URL 在 Connector 中组装。
-
-```
-config/database.py → connections / configuration(name)
-                 → Connector.make_url() → ConnectionFactory → Connection
-```
-
-连接名与驱动解耦（`mysql`、`pgsql`、`sqlite` 为连接名，同驱动可配置多个连接）。
-
-```python
-from app.infrastructure.database.db import DB
-
-async with DB.connection() as session:        # 默认连接
-    ...
-
-async with DB.connection("sqlite") as session:
-    ...
-```
-
-应用层推荐通过 `SessionProvider` 获取 session（见 `application/user/service.py`）。
-
-### 迁移（Alembic）
-
-在项目根目录执行：
+### 多轮对话示例
 
 ```bash
-# 创建迁移
-alembic -c database/alembic.ini revision --autogenerate -m "add_xxx_table"
+# 1. 创建会话（可选，chat 不传 conversation_id 也会自动创建）
+curl -X POST http://127.0.0.1:8000/api/v1/conversations -H "Content-Type: application/json" -d '{"title":"我的对话"}'
 
-# 应用到最新
-alembic -c database/alembic.ini upgrade head
+# 2. 第一轮
+curl -X POST http://127.0.0.1:8000/api/v1/chat -H "Content-Type: application/json" -d '{"message":"记住42","conversation_id":"<id>"}'
 
-# 当前版本
-alembic -c database/alembic.ini current
-
-# 历史
-alembic -c database/alembic.ini history
-
-# 回滚一步
-alembic -c database/alembic.ini downgrade -1
-
-# 回滚到指定 revision
-alembic -c database/alembic.ini downgrade <revision_id>
-
-# 回滚到最初
-alembic -c database/alembic.ini downgrade base
+# 3. 第二轮（自动读历史）
+curl -X POST http://127.0.0.1:8000/api/v1/chat -H "Content-Type: application/json" -d '{"message":"刚才的数字是？","conversation_id":"<id>"}'
 ```
 
-`database/migrations/env.py` 通过 `sync_url()` 读取连接，与 `config/database.py` 保持一致。Model 在 `registry.py` 导入后，`--autogenerate` 可检测变更。
+数据存储：`storage/agent.sqlite`（SQLite）
 
-### 持久化 Model
+### 工具（file / web / terminal）
 
-ORM 属于基础设施，放在 `infrastructure/persistence/models/`：
+默认 **personal + full** 启用全部 toolset；工作目录为 `storage/workspace/`。
 
-```python
-from app.domain.user.enums import UserStatus
-from app.infrastructure.database.orm.base import Base
+| toolset | 工具 | 说明 |
+|---------|------|------|
+| `file` | `read_file`, `list_directory`, `write_file`* | 路径相对 workspace，禁止目录穿越 |
+| `web` | `fetch_webpage` | 抓取公开 HTTP/HTTPS 页面文本 |
+| `terminal` | `run_terminal_command` | 仅 personal + full，在 workspace 下执行 shell |
 
-class User(Base):
-    __tablename__ = "users"
-    ...
+\* `write_file` 在 `readonly` 策略下不可用。
+
+```bash
+# 查看当前可用工具
+curl http://127.0.0.1:8000/api/v1/agent/tools
 ```
 
-在 `persistence/registry.py` 导入后，Alembic `--autogenerate` 可检测变更。
+相关 env：`AGENT_DEFAULT_TOOL_POLICY`、`AGENT_ENABLED_TOOLSETS`、`AGENT_DISABLED_TOOLSETS`（见 `.env.sample`）。
 
-## 日志
+### 短时记忆（上下文压缩）
 
-基建：`configure_logging()` → `LogManager` 读 `LoggingConfig.channels`；各层使用 `logging.getLogger(__name__)`。
+长会话会从 SQLite 加载历史并注入 Agent。为避免超过模型 context window，默认启用 LangChain **`SummarizationMiddleware`**：
 
-- **路径**：各通道在 `config/logging.py` → `LoggingConfig.channels` 定义（默认 `storage/logs/{APP_NAME}/`）
-- **文件**：`app.log`（业务）、`request.log`（访问）、`db.log`（SQL）、`exception.log`
-- **级别**：`LOG_LEVEL` 控制所有通道与控制台
-- **格式**：`LOG_JSON=false` 文本行；`LOG_JSON=true` 单行 JSON
-- **trace_id**：`RequestScopeMiddleware` + `TraceIdFilter`；访问日志与 `JsonResponse` 均带出
-- **轮转**：`LOG_DRIVER=single|daily|rotating`
+- 消息数 ≥ `AGENT_SUMMARIZATION_TRIGGER_MESSAGES`（默认 40）时，自动摘要旧消息
+- 保留最近 `AGENT_SUMMARIZATION_KEEP_MESSAGES`（默认 20）条
+- 从 DB 加载时最多取 `AGENT_MAX_HISTORY_MESSAGES`（默认 200）条
 
-常用 logger：`__name__`（应用）、`app.request`（HTTP）、`app.channel.exception`（领域异常）。
+可选：`AGENT_SUMMARIZATION_TRIGGER_TOKENS`、`AGENT_SUMMARIZATION_TRIGGER_FRACTION`；摘要模型默认同对话模型，可用 `AGENT_SUMMARIZATION_PROVIDER` / `AGENT_SUMMARIZATION_MODEL` 指定更便宜的模型（如 `glm-4-flash`）。
 
-## 统一 API 响应
+### RAG 知识库
 
-对外 JSON 由 `app/interfaces/http/support/response/json.py` 的 `JsonResponse` 定义：
+personal 模式默认 **SQLite 向量存储** + 智谱 `embedding-3`（需 `ZHIPUAI_API_KEY`）。
 
-| 字段 | 说明 |
-|------|------|
-| `code` | 10 位字符串响应码 |
-| `success` | 是否成功（模型字段 `is_success`） |
-| `message` | 提示文案 |
-| `data` | 业务数据，可为 `null` |
-| `trace_id` | 链路 ID |
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/knowledge-bases` | 创建知识库 |
+| `GET` | `/api/v1/knowledge-bases` | 列表 |
+| `POST` | `/api/v1/knowledge-bases/{id}/documents` | 入库（`content` 或 `file_path`） |
+| `POST` | `/api/v1/knowledge-bases/{id}/search` | 向量检索 |
+| `GET` | `/api/v1/documents/{id}` | 文档详情 |
 
-### 10 位响应码
+Agent 工具：`search_knowledge`（toolset `rag`，默认启用）
 
-格式：`[HTTP 3位][服务码 3位][低位 4位]`
+```bash
+# 创建知识库并入库
+curl -X POST http://127.0.0.1:8000/api/v1/knowledge-bases -H "Content-Type: application/json" -d '{"name":"my-kb"}'
+curl -X POST http://127.0.0.1:8000/api/v1/knowledge-bases/<kb_id>/documents \
+  -H "Content-Type: application/json" \
+  -d '{"title":"readme","content":"The secret code is RAG-42."}'
 
-```
-200 + 001 + 0000  →  "2000010000"   # 请求成功
-404 + 001 + 0102  →  "4040010102"   # 数据不存在
-```
-
-- **低位 4 位**在码表中定义（`CodeDefinition.code`）
-- **服务码**来自 `APP_SERVICE_CODE`（默认 `001`）
-- 完整码由 `CodedEnum.full_code()` 自动组装
-
-### 码表
-
-位于 `app/interfaces/http/support/response/code/`：
-
-| 文件 | 说明 |
-|------|------|
-| `contract.py` | `CodeDefinition`、`CodedEnum` 基类 |
-| `success_code.py` | `SuccessCode` |
-| `error_code.py` | `ErrorCode` |
-
-```python
-from app.interfaces.http.support.response.json import JsonResponse
-from app.interfaces.http.support.response.code.error_code import ErrorCode
-from app.interfaces.http.support.response.code.success_code import SuccessCode
-
-return JsonResponse.success(data={"id": 1})
-return JsonResponse.success(data=user, code=SuccessCode.SUCCESS_CREATED)
-return JsonResponse.error(code=ErrorCode.NOT_FOUND_ERROR, message="用户不存在")
+# 检索
+curl -X POST http://127.0.0.1:8000/api/v1/knowledge-bases/<kb_id>/search \
+  -H "Content-Type: application/json" -d '{"query":"secret code"}'
 ```
 
-### 业务错误分层
+RAG env：`RAG_EMBEDDING_PROVIDER=zhipu`、`RAG_EMBEDDING_MODEL=embedding-3`、`RAG_EMBEDDING_DIMENSIONS=1024`
 
-- **领域语义**：`domain/` 或 `application/` — `DomainError` 子类，不含 HTTP / 服务码
-- **对外码表**：`interfaces/http/support/response/code/` — `SuccessCode`、`ErrorCode` 及模块扩展
-- **映射**：`handlers/domain_error.py` 将领域异常转为 `ErrorCode`，再 `JsonResponse.error(...)`
+### Skills + Memory
 
-## HTTP 路由
+**Skills** 采用 [agentskills.io](https://agentskills.io) 风格：在 `storage/skills/**/SKILL.md` 放置带 YAML frontmatter 的 Markdown。System prompt 只注入技能索引（渐进式披露），Agent 通过 `skill_view` 按需加载完整说明。
 
+**Memory** 使用 SQLite `memory_entries` 表，替代 Hermes 的 MEMORY.md / USER.md。启动时 frozen snapshot 注入 system prompt；Agent 可通过 `memory` 工具增删改。
+
+| toolset | 工具 | 说明 |
+|---------|------|------|
+| `skills` | `skills_list`, `skill_view` | 列出 / 加载技能 |
+| `memory` | `memory` | `add` / `replace` / `remove`，target 为 `memory` 或 `user` |
+
+```bash
+# 技能列表
+curl http://127.0.0.1:8000/api/v1/skills
+
+# 新增用户画像
+curl -X POST http://127.0.0.1:8000/api/v1/memory/entries \
+  -H "Content-Type: application/json" \
+  -d '{"target":"user","content":"Preferred language: 中文"}'
+
+# 查看记忆快照
+curl http://127.0.0.1:8000/api/v1/memory
 ```
-/api/v1/users/...   ← api/v1/endpoints/user.py
-/ws/v1/...          ← ws/v1/（待扩展）
+
+示例技能：`storage/skills/demo/SKILL.md`
+
+### Gateway（Telegram）
+
+Telegram Bot 复用 `ChatService`，每个 chat 绑定一个 `conversation_id`（存 SQLite `gateway_bindings`）。
+
+```bash
+uv sync --extra gateway
+# .env 中设置 GATEWAY_TELEGRAM_ENABLED=true 与 GATEWAY_TELEGRAM_BOT_TOKEN
+uv run python -m app.interfaces.gateway
 ```
 
-注册链：`main.py` → `routers/register.py` → `api/router`（`/api`）→ `v1/router`（`/v1`）
+Bot 命令：`/start` `/help` `/new` `/conv`；普通文本走 Agent 对话（默认流式 edit 回复）。
 
-- 新 REST：在 `api/v1/endpoints/` 增加模块并在 `api/v1/router.py` 挂载
-- 新 WebSocket：在 `ws/v1/endpoints/` 增加模块并在 `ws/v1/router.py` 挂载
-- 路由保持薄：Depends 注入 Service → Presenter 转 DTO → `JsonResponse`
+**安全**：`GATEWAY_TELEGRAM_ALLOWED_CHAT_IDS` 白名单；`server` 模式下白名单为空则拒绝所有 chat。
+
+### CLI 个人模式（Hermes 风格 TUI）
+
+底部固定输入 + 上方滚动输出，复用 `ChatService`。
+
+```bash
+# 交互式 TUI（默认）
+uv run python -m app.interfaces.cli
+
+# 单条消息
+uv run python -m app.interfaces.cli -m "你好"
+
+# 纯 readline 模式（无 TUI）
+uv run python -m app.interfaces.cli --plain
+```
+
+**交互风格**（对齐 hermes-agent）：
+- 输入提示 `❯`，Agent 忙碌时 `⚕`
+- 用户消息：`●` + 分隔线
+- 助手回复：流式圆角框 `╭─ ⚕ Agent ─╮`
+- Enter 发送，Alt+Enter / Ctrl+J 换行，Ctrl+D 退出
+
+REPL 命令：`/help` `/new` `/conv` `/model` `/tools` `/models` `/exit`
+
+### WebSocket 流式 `/ws/v1/chat`
+
+> **注意**：浏览器请访问 `GET /ws/v1/chat/info` 查看说明；  
+> 流式对话必须用 **WebSocket** 连接 `/ws/v1/chat`（不要用普通 GET）。
+
+连接后发送一条 JSON（字段同 REST `ChatRequest`），服务端按序推送事件：
+
+```json
+{"event": "start", "data": {"provider": "zhipu", "model": "glm-4.7", "trace_id": "..."}}
+{"event": "delta", "data": {"content": "你"}}
+{"event": "delta", "data": {"content": "好"}}
+{"event": "done", "data": {"reply": "你好", "model": {...}}}
+```
+
+错误时：
+
+```json
+{"event": "error", "data": {"message": "...", "trace_id": "..."}}
+```
 
 ## Roadmap
 
-- [x] 数据库连接层（DatabaseManager / Connectors / DB Facade）
-- [x] `lifespan` disconnect
-- [x] DDD 目录骨架 + User ORM
-- [x] 统一 API 响应（`JsonResponse` + `CodedEnum`）
-- [x] HTTP 路由分包（`api/v1`、`ws/v1`）
-- [x] domain 实体 / 仓储接口（User）
-- [x] application 用例（UserService）
-- [x] 领域异常 handler（`DomainError` → `JsonResponse.error`）
-- [x] 中间件（RequestScope / CORS / request_log 等）
-- [x] 日志（LogManager + channels + request.log）
-- [x] AI / 团队文档（AGENTS.md + Cursor rules）
-- [ ] 全局异常 handler 补全（422 校验 / 500 未捕获 / `HTTPException`）
-- [ ] 测试与 CI
+- [x] Agent-only 目录骨架
+- [x] 配置（app / llm / agent / rag）
+- [x] 用户自选模型（ModelSelection + factory + static catalog）
+- [x] 对话 REST（POST /api/v1/chat）
+- [x] WebSocket 流式（/ws/v1/chat）
+- [x] Conversation 持久化（SQLite + 多轮 + model 绑定）
+- [x] 工具（file / web / terminal）
+- [x] CLI 个人模式
+- [x] RAG + 向量检索（SQLite + embedding-3）
+- [x] Skills + Memory（文件系统 Skills + SQLite 记忆）
+- [x] Gateway（Telegram Bot）
+- [ ] Gateway 扩展（Discord / Slack 等）
 
-## 开发工具
+## 开发
 
 ```bash
 uv run black .
 uv run ruff check .
-uv sync --extra dev   # 可选开发依赖（pytest、black、ruff）
 ```
