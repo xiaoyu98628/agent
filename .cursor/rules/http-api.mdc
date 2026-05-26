@@ -1,0 +1,45 @@
+---
+description: HTTP 接口层补充约定（路由、Presenter、Deps、中间件）
+globs: app/interfaces/http/**/*
+alwaysApply: false
+---
+
+# HTTP 接口层
+
+## 路由注册链
+
+```
+main.py → routers/register.py → api/router (/api) → v1/router (/v1) → endpoints/
+                              → ws/router (/ws) → v1/router
+```
+
+- REST 前缀：`/api/v1/...`；WebSocket：`/ws/v1/...`
+- 路由保持**薄**：Depends 注入 Service → Presenter 转 DTO → `JsonResponse`
+- 不在 endpoint 内写 SQLAlchemy 查询或 Entity 字段映射
+
+## Schemas / Presenter / Deps
+
+| 目录 | 职责 |
+|------|------|
+| `schemas/requests/` | 入参 Pydantic 模型（Query / Body） |
+| `schemas/responses/` | 出参 Pydantic 模型 |
+| `presenters/` | Entity / PageResult → Response DTO |
+| `deps/` | 返回 application Service 实例 |
+
+```python
+# endpoints/user.py 典型模式
+service: UserService = Depends(get_user_service)
+return JsonResponse.success(data=to_response(user))
+```
+
+## 领域错误映射
+
+- 新模块异常：在 `handlers/domain_error.py` 的 `_resolve_error_code` 追加 `isinstance` 分支
+- 领域异常继承 `DomainError`，映射层决定 `ErrorCode` 与 HTTP 状态
+
+## 中间件注意
+
+修改 `middleware/register.py` 时：
+
+- `RequestScope` 须在 `RequestLog` **外侧**（后注册），否则 trace_id 缺失
+- `CorsMiddleware` 须在最外层，异常 handler 直接返回时也要带 CORS 头

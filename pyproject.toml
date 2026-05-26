@@ -1,0 +1,50 @@
+[project]
+name = "agent"
+version = "0.1.0"
+description = "Agent — FastAPI DDD backend with config, middleware, unified response, and database infrastructure."
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [
+    {name = "CaoGaoYu", email = "1765841705@qq.com"}
+]
+dependencies = [
+    "fastapi>=0.136.3",
+    "uvicorn>=0.48.0",
+
+    "sqlalchemy[asyncio]>=2.0.50",
+    "alembic>=1.18.4",
+
+    "aiomysql>=0.3.2", # mysql async
+    "aiosqlite>=0.22.1", # sqlite async
+    "asyncpg>=0.31.0", # postgresql async
+
+    "pymysql>=1.1.0", # mysql sync (migrations)
+    "psycopg2-binary>=2.9.0", # postgresql sync (migrations)
+
+    "pydantic-settings>=2.14.1",
+    "pydantic>=2.13.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "black>=24.0.0",
+    "ruff>=0.5.0",
+]
+
+# 目标 Python 版本
+[tool.ty.environment]
+python-version = "3.14"
+
+# 镜像源
+#[[tool.uv.index]]
+#url = "https://mirrors.cloud.tencent.com/pypi/simple"
+#default = true
+
+[tool.black]
+line-length = 150
+
+[tool.ruff]
+line-length = 150
+select = ["E", "F", "I", "N", "W", "UP"]
