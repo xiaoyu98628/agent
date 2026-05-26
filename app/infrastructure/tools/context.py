@@ -8,6 +8,7 @@ class ToolContext:
 
     workspace_root: Path
     allow_write: bool
+    dangerous_command_policy: str
     command_timeout_seconds: int
     web_fetch_timeout_seconds: int
     max_output_chars: int

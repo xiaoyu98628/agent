@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from langchain_core.tools import BaseTool, tool
 
 from app.infrastructure.tools.context import ToolContext

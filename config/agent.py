@@ -25,9 +25,12 @@ class AgentConfig(BaseSettings):
     sandbox_backend: Literal["none", "docker"] = Field(default="none", description="代码执行沙箱后端")
     workspace_subdir: str = Field(default="workspace", description="Agent 工作目录，位于 storage/ 下")
     command_timeout_seconds: int = Field(default=30, ge=1, le=300, description="终端命令超时（秒）")
+    dangerous_command_policy: Literal["block", "allow"] = Field(default="block", description="危险终端命令策略")
     web_fetch_timeout_seconds: int = Field(default=15, ge=1, le=120, description="网页抓取超时（秒）")
     max_tool_output_chars: int = Field(default=8000, ge=500, description="工具输出最大字符数")
     max_read_file_bytes: int = Field(default=512_000, ge=1024, description="read_file 单文件最大字节")
+    context_files_enabled: bool = Field(default=True, description="是否将 AGENTS.md / .cursorrules 等项目上下文注入系统提示词")
+    max_context_file_chars: int = Field(default=20_000, ge=1000, description="单个项目上下文文件注入字符上限")
     max_history_messages: int = Field(
         default=200,
         ge=0,

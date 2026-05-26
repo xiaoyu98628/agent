@@ -5,6 +5,7 @@ from typing import Any
 from langchain.agents import create_agent
 
 from app.application.agent.middleware import build_summarization_middleware
+from app.application.agent.prompt_context import build_runtime_context_prompt
 from app.application.support.text import sanitize_text
 from app.domain.llm.entity import ModelSelection
 from app.infrastructure.llm.factory import build_langchain_model
@@ -12,6 +13,7 @@ from app.infrastructure.memory.sqlite_sync import sync_format_snapshot
 from app.infrastructure.skill.loader import build_skills_prompt_index
 from app.infrastructure.tools.registry import build_agent_tools
 from config.config import config
+
 
 def _build_system_prompt(selection: ModelSelection, tool_names: list[str]) -> str:
     configure = config()
@@ -28,6 +30,15 @@ def _build_system_prompt(selection: ModelSelection, tool_names: list[str]) -> st
             "File paths are relative to the agent workspace directory. "
             "After tool calls, always reply to the user in natural language."
         )
+        if "memory" in tool_names:
+            parts.append(
+                "Use the memory tool to persist compact, durable facts that will matter in future sessions: "
+                "user preferences, stable project facts, and tool quirks."
+            )
+        if "session_search" in tool_names:
+            parts.append("When the user refers to prior conversations or missing context, use session_search before asking them to repeat it.")
+        if "todo" in tool_names:
+            parts.append("For multi-step work, use the todo tool to track concrete pending and completed steps.")
     skill_index = build_skills_prompt_index()
     if skill_index:
         parts.append(skill_index)
@@ -35,6 +46,10 @@ def _build_system_prompt(selection: ModelSelection, tool_names: list[str]) -> st
         memory_block = sync_format_snapshot(workspace_id=configure.storage.default_workspace_id)
         if memory_block:
             parts.append(memory_block)
+    if configure.agent.context_files_enabled:
+        runtime_context = build_runtime_context_prompt(max_chars=configure.agent.max_context_file_chars)
+        if runtime_context:
+            parts.append(runtime_context)
     return "\n\n".join(parts)
 
 

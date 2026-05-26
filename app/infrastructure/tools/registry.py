@@ -9,15 +9,19 @@ from app.infrastructure.tools.policy import (
     TOOLSET_FILE,
     TOOLSET_MEMORY,
     TOOLSET_RAG,
+    TOOLSET_SESSION,
     TOOLSET_SKILLS,
     TOOLSET_TERMINAL,
+    TOOLSET_TODO,
     TOOLSET_WEB,
     ToolPolicy,
     resolve_tool_policy,
 )
 from app.infrastructure.tools.rag_tools import build_rag_tools
+from app.infrastructure.tools.session_tools import build_session_tools
 from app.infrastructure.tools.skill_tools import build_skill_tools
 from app.infrastructure.tools.terminal_tools import build_terminal_tools
+from app.infrastructure.tools.todo_tools import build_todo_tools
 from app.infrastructure.tools.web_tools import build_web_tools
 from config.config import Config
 
@@ -27,6 +31,7 @@ def _build_context(configure: Config, policy: ToolPolicy) -> ToolContext:
     return ToolContext(
         workspace_root=Path(agent_cfg.workspace_dir),
         allow_write=policy.allow_write,
+        dangerous_command_policy=agent_cfg.dangerous_command_policy,
         command_timeout_seconds=agent_cfg.command_timeout_seconds,
         web_fetch_timeout_seconds=agent_cfg.web_fetch_timeout_seconds,
         max_output_chars=agent_cfg.max_tool_output_chars,
@@ -53,6 +58,10 @@ def build_agent_tools(configure: Config) -> list[BaseTool]:
         tools.extend(build_memory_tools())
     if TOOLSET_SKILLS in policy.toolsets and configure.skills.enabled:
         tools.extend(build_skill_tools())
+    if TOOLSET_SESSION in policy.toolsets:
+        tools.extend(build_session_tools())
+    if TOOLSET_TODO in policy.toolsets:
+        tools.extend(build_todo_tools())
     if TOOLSET_TERMINAL in policy.toolsets and policy.allow_terminal:
         tools.extend(build_terminal_tools(ctx))
 

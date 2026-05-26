@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_messages_content ON messages(content);
 
 CREATE TABLE IF NOT EXISTS knowledge_bases (
     id TEXT PRIMARY KEY,
@@ -69,6 +70,16 @@ CREATE TABLE IF NOT EXISTS memory_entries (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_memory_workspace_target ON memory_entries(workspace_id, target, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_todos (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_todos_workspace ON agent_todos(workspace_id, status, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS gateway_bindings (
     platform TEXT NOT NULL,

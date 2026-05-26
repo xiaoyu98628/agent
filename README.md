@@ -167,7 +167,12 @@ curl -X POST http://127.0.0.1:8000/api/v1/chat -H "Content-Type: application/jso
 |---------|------|------|
 | `file` | `read_file`, `list_directory`, `write_file`* | 路径相对 workspace，禁止目录穿越 |
 | `web` | `fetch_webpage` | 抓取公开 HTTP/HTTPS 页面文本 |
-| `terminal` | `run_terminal_command` | 仅 personal + full，在 workspace 下执行 shell |
+| `rag` | `search_knowledge` | 检索已入库知识库 |
+| `memory` | `memory` | 管理长期记忆 / 用户画像 |
+| `skills` | `skills_list`, `skill_view` | 列出并按需加载 Skills |
+| `session` | `session_search` | 搜索历史会话消息 |
+| `todo` | `todo` | 跟踪 Agent 当前工作清单 |
+| `terminal` | `run_terminal_command` | 仅 personal + full，在 workspace 下执行 shell；默认阻断高风险命令 |
 
 \* `write_file` 在 `readonly` 策略下不可用。
 
@@ -176,7 +181,11 @@ curl -X POST http://127.0.0.1:8000/api/v1/chat -H "Content-Type: application/jso
 curl http://127.0.0.1:8000/api/v1/agent/tools
 ```
 
-相关 env：`AGENT_DEFAULT_TOOL_POLICY`、`AGENT_ENABLED_TOOLSETS`、`AGENT_DISABLED_TOOLSETS`（见 `.env.sample`）。
+相关 env：`AGENT_DEFAULT_TOOL_POLICY`、`AGENT_ENABLED_TOOLSETS`、`AGENT_DISABLED_TOOLSETS`、`AGENT_DANGEROUS_COMMAND_POLICY`（见 `.env.sample`）。
+
+### Hermes-style 上下文
+
+Agent 会将项目上下文注入系统提示词：优先加载 `.hermes.md` / `HERMES.md`，其次是 `AGENTS.md`、`CLAUDE.md`、`.cursorrules` 或 `.cursor/rules/*.mdc`。上下文文件会做基础注入风险扫描与长度截断；可用 `AGENT_CONTEXT_FILES_ENABLED=false` 关闭。
 
 ### 短时记忆（上下文压缩）
 
