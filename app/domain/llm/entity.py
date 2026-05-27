@@ -15,6 +15,19 @@ class ModelSelection:
 
 
 @dataclass(frozen=True, slots=True)
+class StaticModelEntry:
+    """静态模型目录条目。"""
+
+    provider: str
+    model: str
+    label: str
+    supports_tools: bool = True
+
+    def cache_key(self) -> str:
+        return f"{self.provider}:{self.model}"
+
+
+@dataclass(frozen=True, slots=True)
 class LlmCredentials:
     """LLM 调用凭据。"""
 

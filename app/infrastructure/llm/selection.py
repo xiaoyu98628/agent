@@ -1,7 +1,7 @@
 from app.domain.llm.entity import ModelSelection
 from app.domain.llm.exceptions import ModelNotAllowedError, UnsupportedProviderError
+from app.infrastructure.llm.registry import list_static_models
 from config.config import config
-from config.llm import DEFAULT_STATIC_MODELS, StaticModelEntry
 
 
 def default_selection() -> ModelSelection:
@@ -53,12 +53,3 @@ def validate_selection(selection: ModelSelection) -> None:
     allowed_models = {entry.cache_key() for entry in list_static_models()}
     if allowed_models and selection.cache_key() not in allowed_models:
         raise ModelNotAllowedError(f"模型不在允许列表中: {selection.cache_key()}")
-
-
-def list_static_models() -> list[ModelSelection]:
-    entries = [StaticModelEntry.model_validate(item) for item in DEFAULT_STATIC_MODELS]
-    return [ModelSelection(provider=e.provider, model=e.model) for e in entries]
-
-
-def list_static_model_entries() -> list[StaticModelEntry]:
-    return [StaticModelEntry.model_validate(item) for item in DEFAULT_STATIC_MODELS]

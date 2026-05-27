@@ -27,9 +27,7 @@ async def send_chat_message(
         max_tokens=model_req.max_tokens if model_req else None,
         history=[ChatMessageInput(role=m.role, content=m.content) for m in body.history],
     )
-    return JsonResponse.success(
-        data=to_chat_response(reply=result.reply, model=result.model, conversation_id=result.conversation_id)
-    )
+    return JsonResponse.success(data=to_chat_response(reply=result.reply, model=result.model, conversation_id=result.conversation_id))
 
 
 @router.get("/models/options", summary="可选模型列表", include_in_schema=True)
@@ -45,7 +43,15 @@ async def get_model_options() -> JsonResponse[ModelOptionsResponse]:
     data = ModelOptionsResponse(
         catalog_source=str(payload["catalog_source"]),
         providers=list(payload["providers"]),
-        models=[ModelOptionItem.model_validate(item.model_dump()) for item in payload["models"]],
+        models=[
+            ModelOptionItem(
+                provider=item.provider,
+                model=item.model,
+                label=item.label,
+                supports_tools=item.supports_tools,
+            )
+            for item in payload["models"]
+        ],
         default=default,
     )
     return JsonResponse.success(data=data)

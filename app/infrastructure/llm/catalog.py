@@ -1,9 +1,11 @@
-from app.infrastructure.llm.selection import list_static_model_entries
+from typing import Literal
+
+from app.domain.llm.entity import StaticModelEntry
+from app.infrastructure.llm.registry import list_static_model_entries
 from config.config import config
-from config.llm import StaticModelEntry
 
 
-def list_model_options() -> dict[str, list[StaticModelEntry] | list[str]]:
+def list_model_options() -> dict[str, Literal["static"] | list[str] | list[StaticModelEntry] | dict[str, str]]:
     """返回 Phase 1 静态模型目录。"""
     configure = config()
     entries = list_static_model_entries()
