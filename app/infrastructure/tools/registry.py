@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from langchain_core.tools import BaseTool
@@ -26,6 +28,13 @@ from app.infrastructure.tools.web_tools import build_web_tools
 from config.config import Config
 
 
+@dataclass(frozen=True, slots=True)
+class ToolsetAdapter:
+    name: str
+    build: Callable[[ToolContext], list[BaseTool]]
+    enabled: Callable[[Config, ToolPolicy], bool]
+
+
 def _build_context(configure: Config, policy: ToolPolicy) -> ToolContext:
     agent_cfg = configure.agent
     return ToolContext(
@@ -39,38 +48,67 @@ def _build_context(configure: Config, policy: ToolPolicy) -> ToolContext:
     )
 
 
+def _enabled(_: Config, __: ToolPolicy) -> bool:
+    return True
+
+
+def _rag_enabled(configure: Config, _: ToolPolicy) -> bool:
+    return configure.rag.enabled
+
+
+def _memory_enabled(configure: Config, _: ToolPolicy) -> bool:
+    return configure.memory.enabled
+
+
+def _skills_enabled(configure: Config, _: ToolPolicy) -> bool:
+    return configure.skills.enabled
+
+
+def _terminal_enabled(_: Config, policy: ToolPolicy) -> bool:
+    return policy.allow_terminal
+
+
+def _without_context(builder: Callable[[], list[BaseTool]]) -> Callable[[ToolContext], list[BaseTool]]:
+    def wrapped(_: ToolContext) -> list[BaseTool]:
+        return builder()
+
+    return wrapped
+
+
+_TOOLSET_ADAPTERS: tuple[ToolsetAdapter, ...] = (
+    ToolsetAdapter(name=TOOLSET_FILE, build=build_file_tools, enabled=_enabled),
+    ToolsetAdapter(name=TOOLSET_WEB, build=build_web_tools, enabled=_enabled),
+    ToolsetAdapter(name=TOOLSET_RAG, build=_without_context(build_rag_tools), enabled=_rag_enabled),
+    ToolsetAdapter(name=TOOLSET_MEMORY, build=_without_context(build_memory_tools), enabled=_memory_enabled),
+    ToolsetAdapter(name=TOOLSET_SKILLS, build=_without_context(build_skill_tools), enabled=_skills_enabled),
+    ToolsetAdapter(name=TOOLSET_SESSION, build=_without_context(build_session_tools), enabled=_enabled),
+    ToolsetAdapter(name=TOOLSET_TODO, build=_without_context(build_todo_tools), enabled=_enabled),
+    ToolsetAdapter(name=TOOLSET_TERMINAL, build=build_terminal_tools, enabled=_terminal_enabled),
+)
+
+
+def registered_toolsets() -> tuple[str, ...]:
+    return tuple(adapter.name for adapter in _TOOLSET_ADAPTERS)
+
+
 def build_agent_tools(configure: Config) -> list[BaseTool]:
     """按配置组装 LangChain 工具列表。"""
-    policy = resolve_tool_policy(configure)
+    policy = resolve_tool_policy(configure, available_toolsets=registered_toolsets())
     if not policy.toolsets:
         return []
 
     ctx = _build_context(configure, policy)
     tools: list[BaseTool] = []
-
-    if TOOLSET_FILE in policy.toolsets:
-        tools.extend(build_file_tools(ctx))
-    if TOOLSET_WEB in policy.toolsets:
-        tools.extend(build_web_tools(ctx))
-    if TOOLSET_RAG in policy.toolsets and configure.rag.enabled:
-        tools.extend(build_rag_tools())
-    if TOOLSET_MEMORY in policy.toolsets and configure.memory.enabled:
-        tools.extend(build_memory_tools())
-    if TOOLSET_SKILLS in policy.toolsets and configure.skills.enabled:
-        tools.extend(build_skill_tools())
-    if TOOLSET_SESSION in policy.toolsets:
-        tools.extend(build_session_tools())
-    if TOOLSET_TODO in policy.toolsets:
-        tools.extend(build_todo_tools())
-    if TOOLSET_TERMINAL in policy.toolsets and policy.allow_terminal:
-        tools.extend(build_terminal_tools(ctx))
+    for adapter in _TOOLSET_ADAPTERS:
+        if adapter.name in policy.toolsets and adapter.enabled(configure, policy):
+            tools.extend(adapter.build(ctx))
 
     return tools
 
 
 def describe_agent_tools(configure: Config) -> dict:
     """返回当前运行时工具策略与工具名列表（供 API 展示）。"""
-    policy = resolve_tool_policy(configure)
+    policy = resolve_tool_policy(configure, available_toolsets=registered_toolsets())
     tools = build_agent_tools(configure)
     return {
         "deployment_mode": configure.app.deployment_mode,

@@ -22,7 +22,7 @@ class ToolPolicy:
     allow_terminal: bool
 
 
-def resolve_tool_policy(configure: Config) -> ToolPolicy:
+def resolve_tool_policy(configure: Config, *, available_toolsets: tuple[str, ...] = ALL_TOOLSETS) -> ToolPolicy:
     """按 deployment_mode + agent 配置解析可用 toolset。"""
     app_cfg = configure.app
     agent_cfg = configure.agent
@@ -36,7 +36,7 @@ def resolve_tool_policy(configure: Config) -> ToolPolicy:
         and (not agent_cfg.enabled_toolsets or TOOLSET_TERMINAL in agent_cfg.enabled_toolsets)
     )
 
-    toolsets = set(ALL_TOOLSETS)
+    toolsets = set(available_toolsets)
     if not allow_terminal:
         toolsets.discard(TOOLSET_TERMINAL)
     if agent_cfg.enabled_toolsets:
