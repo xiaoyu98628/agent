@@ -32,6 +32,14 @@ def list_static_models() -> list[ModelSelection]:
     return [ModelSelection(provider=entry.provider, model=entry.model) for entry in list_static_model_entries()]
 
 
+def model_supports_tools(selection: ModelSelection) -> bool:
+    key = selection.cache_key().lower()
+    for entry in list_static_model_entries():
+        if entry.cache_key().lower() == key:
+            return entry.supports_tools
+    return True
+
+
 def _bootstrap_registry() -> None:
     from app.infrastructure.llm.providers.anthropic import adapter as anthropic_adapter
     from app.infrastructure.llm.providers.deepseek import adapter as deepseek_adapter

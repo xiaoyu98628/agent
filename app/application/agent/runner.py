@@ -9,6 +9,7 @@ from app.application.agent.prompt_context import build_runtime_context_prompt
 from app.application.support.text import sanitize_text
 from app.domain.llm.entity import ModelSelection
 from app.infrastructure.llm.factory import build_langchain_model
+from app.infrastructure.llm.registry import model_supports_tools
 from app.infrastructure.memory.sqlite_sync import sync_format_snapshot
 from app.infrastructure.skill.loader import build_skills_prompt_index
 from app.infrastructure.tools.registry import build_agent_tools
@@ -72,7 +73,7 @@ class AgentRunner:
 
     def _create_agent(self, selection: ModelSelection):
         configure = config()
-        tools = build_agent_tools(configure)
+        tools = build_agent_tools(configure) if model_supports_tools(selection) else []
         tool_names = [tool.name for tool in tools]
         system_prompt = self._system_prompt_override or _build_system_prompt(selection, tool_names)
         model = build_langchain_model(selection)
