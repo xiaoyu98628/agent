@@ -1,1 +1,0 @@
-DEFAULT_WORKSPACE_ID = "local"
