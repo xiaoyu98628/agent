@@ -7,4 +7,4 @@ from app.application.dto.chat import ChatRequest, ChatResponse
 
 class ChatModelPort(Protocol):
     async def complete(self, request: ChatRequest) -> ChatResponse:
-        pass
+        ...

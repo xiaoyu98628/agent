@@ -5,6 +5,12 @@ ChatRole = Literal["system", "user", "assistant", "tool"]
 
 
 @dataclass(frozen=True)
+class ModelSelection:
+    provider: str
+    name: str
+
+
+@dataclass(frozen=True)
 class ChatMessage:
     role: ChatRole
     content: str
@@ -13,7 +19,7 @@ class ChatMessage:
 @dataclass(frozen=True)
 class ChatRequest:
     messages: list[ChatMessage]
-    model: str | None = None
+    model: ModelSelection | None = None
     temperature: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -21,6 +27,6 @@ class ChatRequest:
 @dataclass(frozen=True)
 class ChatResponse:
     content: str
-    model: str | None = None
+    model: ModelSelection | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     raw: Any | None = None
