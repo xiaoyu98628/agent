@@ -2,11 +2,11 @@ from dataclasses import replace
 
 from app.application.dto.chat import ChatRequest, ChatResponse, ModelSelection
 from app.infrastructure.model.provider_factory import ModelProviderFactory
-from config.llm import LlmConfig
+from config.model import ModelConfig
 
 
 class ModelRouter:
-    def __init__(self, provider_factory: ModelProviderFactory, config: LlmConfig):
+    def __init__(self, provider_factory: ModelProviderFactory, config: ModelConfig):
         self.provider_factory = provider_factory
         self.config = config
 
@@ -17,10 +17,10 @@ class ModelRouter:
         return await provider.complete(routed_request)
 
     def _resolve_model(self, requested_model: ModelSelection | None) -> ModelSelection:
-        if self.config.allow_model_override and requested_model is not None:
+        if self.config.allow_override and requested_model is not None:
             return requested_model
 
         return ModelSelection(
-            provider=self.config.provider,
-            name=self.config.model,
+            provider=self.config.default_provider(),
+            name=self.config.default_model(),
         )

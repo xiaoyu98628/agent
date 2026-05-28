@@ -1,8 +1,8 @@
+from importlib import import_module
 from typing import Protocol
 
 from app.application.dto.chat import ChatRequest, ChatResponse
-from app.infrastructure.model.providers.openai_client import OpenAIClient
-from config.llm import LlmConfig
+from config.model import ModelConfig
 
 
 class ChatProvider(Protocol):
@@ -11,30 +11,30 @@ class ChatProvider(Protocol):
 
 
 class ModelProviderFactory:
-    def __init__(self, config: LlmConfig):
+    def __init__(self, config: ModelConfig):
         self.config = config
         self._providers: dict[str, ChatProvider] = {}
 
     def create(self, provider: str) -> ChatProvider:
-        if provider not in self.config.allowed_providers:
-            raise ValueError(f"Unsupported model provider: {provider}")
-
         if provider not in self._providers:
             self._providers[provider] = self._build_provider(provider)
 
         return self._providers[provider]
 
     def _build_provider(self, provider: str) -> ChatProvider:
-        if provider == "openai":
-            api_key = self.config.openai_api_key or self.config.api_key
-            if not api_key:
-                raise ValueError("Missing OPENAI_API_KEY or LLM_API_KEY for provider: openai")
+        if not provider.isidentifier():
+            raise ValueError(f"Unsupported model provider: {provider}")
 
-            return OpenAIClient(
-                api_key=api_key,
-                base_url=self.config.base_url,
-                default_temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-            )
+        module_name = f"app.infrastructure.model.providers.{provider}"
+        try:
+            module = import_module(module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name == module_name:
+                raise ValueError(f"Unsupported model provider: {provider}") from exc
+            raise
 
-        raise ValueError(f"Unsupported model provider: {provider}")
+        create_provider = getattr(module, "create_provider", None)
+        if create_provider is None:
+            raise ValueError(f"Unsupported model provider: {provider}")
+
+        return create_provider(self.config)

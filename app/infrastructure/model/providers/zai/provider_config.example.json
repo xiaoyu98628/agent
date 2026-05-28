@@ -1,0 +1,11 @@
+{
+  "config": {
+    "api_key": "zai-...",
+    "base_url": "https://api.z.ai/api/paas/v4",
+    "max_tokens": 4096
+  },
+  "selected_models": [
+    "glm-4.6"
+  ],
+  "default_model": "glm-4.6"
+}

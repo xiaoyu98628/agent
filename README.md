@@ -9,8 +9,8 @@
 | 模块 | 状态 |
 |------|------|
 | FastAPI 应用 | 已有 `app/main.py`，提供 `/health` |
-| 配置 | 已有 `config/app.py`、`config/config.py`，读取 `.env` 中的 `APP_` 配置 |
-| 模型适配 | 已有 application port、chat DTO、model router、OpenAI 兼容 client 雏形 |
+| 配置 | 已有 `config/app.py`、`config/model.py`、`config/config.py` |
+| 模型适配 | 已有 application port、chat DTO、model router、模型供应商配置与 OpenAI provider 雏形 |
 | HTTP API | 仅健康检查，业务路由待实现 |
 | Agent / LangGraph | 待实现 |
 | CLI / Gateway | 待实现 |
@@ -84,19 +84,25 @@ agent/
 | `APP_PORT` | `8000` | 服务端口 |
 | `APP_DEPLOYMENT_MODE` | `personal` | 部署模式：`personal` 或 `server` |
 | `APP_SERVICE_CODE` | `001` | 三位服务码 |
+| `MODEL_TEMPERATURE` | `0.7` | 默认模型温度 |
+| `MODEL_ALLOW_OVERRIDE` | `true` | 是否允许请求覆盖模型选择 |
+| `MODEL_PROVIDERS_CONFIG_DIR` | 空 | 可选，供应商配置目录；为空时使用各 provider 包内配置 |
+| `MODEL_PROVIDER` | 空 | 可选，运行时覆盖配置文件中的默认供应商 |
+| `MODEL_NAME` | 空 | 可选，运行时覆盖配置文件中的默认模型 |
 
-`.env.sample` 里还保留了 LLM、Agent、RAG、Memory、Skills 等未来配置草案；对应功能接入前，这些配置不会被 `config()` 聚合读取。
+供应商连接参数和已选择模型会写入对应 provider 包内，例如 `app/infrastructure/model/providers/openai/provider_config.json`。也可以设置 `MODEL_PROVIDERS_CONFIG_DIR=storage/model-providers`，让运行时配置写到外部目录下的 `openai/provider_config.json`、`zai/provider_config.json`、`anthropic/provider_config.json`。示例结构参考根目录的 `model_providers.example.json` 和各 provider 包内的 `provider_config.example.json`。真实配置文件可能包含 API Key，默认不提交到 git。
 
 ## 已有模型适配骨架
 
 当前模型调用相关代码位于 `app/infrastructure/model/`：
 
-- `ModelRouter`：根据请求模型或默认配置选择 provider
+- `ModelRouter`：根据请求模型或对应 provider 包内的默认配置选择 provider
 - `ModelProviderFactory`：创建并缓存 provider
 - `OpenAIClient`：调用 OpenAI 兼容 Chat Completions API
 - `ChatModelPort`：application 层使用的模型端口协议
+- `ModelSetupService`：用于配置阶段校验供应商、拉取模型列表、保存多选模型
 
-这部分还没有接入 HTTP endpoint 或 use case。后续需要补齐 LLM 配置模块、业务用例和接口层 DTO / presenter。
+这部分还没有接入 HTTP endpoint。后续可以在接口层提供“选择供应商 -> 填配置 -> 验证 -> 选择模型 -> 保存”的配置流程。
 
 ## 架构约束
 
