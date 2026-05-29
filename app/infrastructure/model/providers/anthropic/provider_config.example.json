@@ -1,11 +1,14 @@
 {
   "config": {
-    "api_key": "sk-ant-...",
+    "api_key_ref": "ANTHROPIC_API_KEY",
     "base_url": "https://api.anthropic.com",
     "max_tokens": 4096
   },
-  "selected_models": [
-    "claude-sonnet-4-5"
-  ],
+  "enabled_models": {
+    "claude-sonnet-4-5": {
+      "temperature": 0.7,
+      "max_tokens": 8192
+    }
+  },
   "default_model": "claude-sonnet-4-5"
 }

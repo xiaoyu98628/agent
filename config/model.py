@@ -7,18 +7,37 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from config.settings import BASE_SETTINGS_CONFIG
-from paths import BASE_DIR
+from paths import BASE_DIR, MODEL_ACTIVE_CONFIG_FILE
 
 
 class ConfiguredProvider(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
-    selected_models: list[str] = Field(default_factory=list)
+    enabled_models: dict[str, dict[str, Any]] = Field(default_factory=dict)
     default_model: str | None = None
 
-    @field_validator("selected_models")
+    @field_validator("enabled_models")
     @classmethod
-    def validate_selected_models(cls, value: list[str]) -> list[str]:
-        return list(dict.fromkeys(model for model in value if model))
+    def validate_enabled_models(cls, value: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        return {model_id: model_config for model_id, model_config in value.items() if model_id}
+
+
+class ActiveModelConfig(BaseModel):
+    provider: str | None = None
+    model: str | None = None
+
+    @classmethod
+    def load(cls, path: Path = MODEL_ACTIVE_CONFIG_FILE) -> ActiveModelConfig:
+        if not path.exists():
+            return cls()
+
+        with path.open("r", encoding="utf-8") as file:
+            return cls.model_validate(json.load(file))
+
+    def save(self, path: Path = MODEL_ACTIVE_CONFIG_FILE) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(self.model_dump(mode="json", exclude_none=True), file, ensure_ascii=False, indent=2)
+            file.write("\n")
 
 
 def load_configured_provider(path: Path) -> ConfiguredProvider:
@@ -47,6 +66,7 @@ class ModelConfig(BaseSettings):
     temperature: float | int = Field(default=0.7, ge=0, le=1, description="模型温度")
     allow_override: bool = Field(default=True, description="是否允许请求覆盖模型选择")
     providers_config_dir: Path | None = Field(default=None, description="模型供应商配置目录；为空时使用各 provider 包内配置")
+    active_config_file: Path = Field(default=MODEL_ACTIVE_CONFIG_FILE, description="当前默认模型配置文件")
 
     @field_validator("providers_config_dir")
     @classmethod
@@ -55,20 +75,28 @@ class ModelConfig(BaseSettings):
             return value
         return BASE_DIR.joinpath(value)
 
+    @field_validator("active_config_file")
+    @classmethod
+    def resolve_active_config_file(cls, value: Path) -> Path:
+        if value.is_absolute():
+            return value
+        return BASE_DIR.joinpath(value)
+
     def default_provider(self) -> str:
-        provider = self.provider or self._active_provider_from_provider_configs()
+        active_model = ActiveModelConfig.load(self.active_config_file)
+        provider = self.provider or active_model.provider
         if not provider:
-            raise ValueError("Missing model provider. Configure a provider package or set MODEL_PROVIDER.")
+            raise ValueError(f"Missing model provider. Configure {self.active_config_file} or set MODEL_PROVIDER.")
         return provider
 
     def default_model(self) -> str:
         if self.name:
             return self.name
 
-        provider = self.default_provider()
-        model = self.provider_setup(provider).default_model
+        active_model = ActiveModelConfig.load(self.active_config_file)
+        model = active_model.model
         if not model:
-            raise ValueError(f"Missing model name. Configure provider {provider} or set MODEL_NAME.")
+            raise ValueError(f"Missing model name. Configure {self.active_config_file} or set MODEL_NAME.")
         return model
 
     def provider_config(self, provider: str) -> dict[str, Any]:
@@ -80,16 +108,6 @@ class ModelConfig(BaseSettings):
         if load_provider_config is None:
             raise ValueError(f"Model provider does not support provider config: {provider}")
         return load_provider_config(self.providers_config_dir)
-
-    def _active_provider_from_provider_configs(self) -> str | None:
-        for provider in ("openai", "zai", "anthropic"):
-            try:
-                configured_provider = self.provider_setup(provider)
-            except ValueError:
-                continue
-            if configured_provider.default_model:
-                return provider
-        return None
 
     def _provider_module(self, provider: str):
         if not provider.isidentifier():

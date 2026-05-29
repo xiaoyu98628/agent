@@ -4,5 +4,6 @@
 **/__pycache__
 test_main.http
 .env
+/model_active.json
 /storage/*.sqlite
 /storage/model-providers/

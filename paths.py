@@ -6,3 +6,5 @@ BASE_DIR: Path = Path(__file__).resolve().parent
 ENV_FILE: Path = BASE_DIR.joinpath(".env")
 
 STORAGE_DIR: Path = BASE_DIR.joinpath("storage")
+
+MODEL_ACTIVE_CONFIG_FILE: Path = BASE_DIR.joinpath("model_active.json")

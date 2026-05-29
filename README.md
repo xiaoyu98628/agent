@@ -87,10 +87,11 @@ agent/
 | `MODEL_TEMPERATURE` | `0.7` | 默认模型温度 |
 | `MODEL_ALLOW_OVERRIDE` | `true` | 是否允许请求覆盖模型选择 |
 | `MODEL_PROVIDERS_CONFIG_DIR` | 空 | 可选，供应商配置目录；为空时使用各 provider 包内配置 |
+| `MODEL_ACTIVE_CONFIG_FILE` | `model_active.json` | 当前默认 provider/model 配置文件 |
 | `MODEL_PROVIDER` | 空 | 可选，运行时覆盖配置文件中的默认供应商 |
 | `MODEL_NAME` | 空 | 可选，运行时覆盖配置文件中的默认模型 |
 
-供应商连接参数和已选择模型会写入对应 provider 包内，例如 `app/infrastructure/model/providers/openai/provider_config.json`。也可以设置 `MODEL_PROVIDERS_CONFIG_DIR=storage/model-providers`，让运行时配置写到外部目录下的 `openai/provider_config.json`、`zai/provider_config.json`、`anthropic/provider_config.json`。示例结构参考根目录的 `model_providers.example.json` 和各 provider 包内的 `provider_config.example.json`。真实配置文件可能包含 API Key，默认不提交到 git。
+每个 provider 包内有自己的 `catalog.json`，用于描述内置模型能力，例如 `reasoning`、`input`、`context_window`、`max_tokens`。用户启用后的模型参数会写入对应 provider 包内的 `provider_config.json`，其中 `enabled_models` 以模型 id 为 key，允许每个模型单独配置 `temperature`、`max_tokens` 等参数。也可以设置 `MODEL_PROVIDERS_CONFIG_DIR=storage/model-providers`，让运行时配置写到外部目录下的 `openai/provider_config.json`、`zai/provider_config.json`、`anthropic/provider_config.json`。当前默认使用哪个 provider/model 写入 `model_active.json`，它只保存选择结果，不保存 API Key。示例结构参考根目录的 `model_providers.example.json` 和各 provider 包内的 `provider_config.example.json`。
 
 ## 已有模型适配骨架
 
@@ -100,7 +101,7 @@ agent/
 - `ModelProviderFactory`：创建并缓存 provider
 - `OpenAIClient`：调用 OpenAI 兼容 Chat Completions API
 - `ChatModelPort`：application 层使用的模型端口协议
-- `ModelSetupService`：用于配置阶段校验供应商、拉取模型列表、保存多选模型
+- `ModelSetupService`：用于配置阶段校验供应商、读取 provider catalog、保存启用模型配置
 
 这部分还没有接入 HTTP endpoint。后续可以在接口层提供“选择供应商 -> 填配置 -> 验证 -> 选择模型 -> 保存”的配置流程。
 

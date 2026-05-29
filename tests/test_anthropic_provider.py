@@ -9,7 +9,7 @@ from app.infrastructure.model.provider_factory import ModelProviderFactory
 from app.infrastructure.model.providers import anthropic
 from app.infrastructure.model.providers.anthropic import AnthropicClient
 from app.infrastructure.model.setup_service import ModelSetupService
-from config.model import ModelConfig
+from config.model import ActiveModelConfig, ModelConfig
 
 
 class FakeModels:
@@ -62,7 +62,7 @@ def fake_anthropic(monkeypatch):
 def test_anthropic_provider_fields():
     fields = ModelSetupService().provider_fields("anthropic")
 
-    assert [field.name for field in fields] == ["api_key", "base_url", "max_tokens"]
+    assert [field.name for field in fields] == ["api_key_ref", "base_url", "max_tokens"]
     assert fields[0].required is True
     assert fields[0].secret is True
     assert fields[1].placeholder == "https://api.anthropic.com"
@@ -78,7 +78,7 @@ async def test_anthropic_validate_and_list_models():
 
     assert [model.id for model in models] == ["claude-sonnet-4-5", "claude-haiku-4-5"]
     assert models[0].name == "Claude Sonnet 4.5"
-    assert models[1].name == "claude-haiku-4-5"
+    assert models[1].name == "Claude Haiku 4.5"
     assert FakeAsyncAnthropic.instances[0].api_key == "test-key"
     assert FakeAsyncAnthropic.instances[0].base_url == "https://api.anthropic.com"
     assert FakeAsyncAnthropic.instances[0].calls == [("models.list", None)]
@@ -86,30 +86,41 @@ async def test_anthropic_validate_and_list_models():
 
 def test_save_provider_models_writes_selected_anthropic_models(tmp_path: Path):
     config_dir = tmp_path / "model-providers"
-    service = ModelSetupService(config_dir=config_dir)
+    active_config_file = tmp_path / "model_active.json"
+    service = ModelSetupService(config_dir=config_dir, active_config_file=active_config_file)
 
     saved = service.save_provider_models(
         provider="anthropic",
         provider_config={"api_key": "test-key", "base_url": "https://api.anthropic.com", "max_tokens": "1024"},
-        selected_models=["claude-sonnet-4-5", "claude-haiku-4-5", "claude-sonnet-4-5"],
+        enabled_models={
+            "claude-sonnet-4-5": {"temperature": 0.7, "max_tokens": 8192},
+            "claude-haiku-4-5": {"temperature": 0.2, "max_tokens": 4096},
+        },
         default_model="claude-haiku-4-5",
     )
     loaded = anthropic.load_provider_config(config_dir)
+    active = ActiveModelConfig.load(active_config_file)
 
     assert saved.default_model == "claude-haiku-4-5"
-    assert loaded.selected_models == ["claude-sonnet-4-5", "claude-haiku-4-5"]
+    assert loaded.enabled_models == {
+        "claude-sonnet-4-5": {"temperature": 0.7, "max_tokens": 8192},
+        "claude-haiku-4-5": {"temperature": 0.2, "max_tokens": 4096},
+    }
     assert loaded.config["api_key"] == "test-key"
+    assert active.provider == "anthropic"
+    assert active.model == "claude-haiku-4-5"
 
 
 def test_factory_creates_anthropic_provider_from_saved_config(tmp_path: Path):
     config_dir = tmp_path / "model-providers"
-    ModelSetupService(config_dir=config_dir).save_provider_models(
+    active_config_file = tmp_path / "model_active.json"
+    ModelSetupService(config_dir=config_dir, active_config_file=active_config_file).save_provider_models(
         provider="anthropic",
         provider_config={"api_key": "test-key", "max_tokens": "1024"},
-        selected_models=["claude-sonnet-4-5"],
+        enabled_models={"claude-sonnet-4-5": {"temperature": 0.6, "max_tokens": 1024}},
     )
 
-    model_config = ModelConfig(_env_file=None, providers_config_dir=config_dir, temperature=0.2)
+    model_config = ModelConfig(_env_file=None, providers_config_dir=config_dir, active_config_file=active_config_file, temperature=0.2)
     provider = ModelProviderFactory(model_config).create("anthropic")
 
     assert isinstance(provider, AnthropicClient)
@@ -120,13 +131,14 @@ def test_factory_creates_anthropic_provider_from_saved_config(tmp_path: Path):
 
 def test_model_router_uses_saved_anthropic_default(tmp_path: Path):
     config_dir = tmp_path / "model-providers"
-    ModelSetupService(config_dir=config_dir).save_provider_models(
+    active_config_file = tmp_path / "model_active.json"
+    ModelSetupService(config_dir=config_dir, active_config_file=active_config_file).save_provider_models(
         provider="anthropic",
         provider_config={"api_key": "test-key"},
-        selected_models=["claude-sonnet-4-5", "claude-haiku-4-5"],
+        enabled_models={"claude-sonnet-4-5": {}, "claude-haiku-4-5": {}},
         default_model="claude-haiku-4-5",
     )
-    model_config = ModelConfig(_env_file=None, providers_config_dir=config_dir)
+    model_config = ModelConfig(_env_file=None, providers_config_dir=config_dir, active_config_file=active_config_file)
     router = ModelRouter(ModelProviderFactory(model_config), model_config)
 
     assert router._resolve_model(None) == ModelSelection(provider="anthropic", name="claude-haiku-4-5")
@@ -135,12 +147,13 @@ def test_model_router_uses_saved_anthropic_default(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_anthropic_complete_converts_system_and_messages(tmp_path: Path):
     config_dir = tmp_path / "model-providers"
-    ModelSetupService(config_dir=config_dir).save_provider_models(
+    active_config_file = tmp_path / "model_active.json"
+    ModelSetupService(config_dir=config_dir, active_config_file=active_config_file).save_provider_models(
         provider="anthropic",
         provider_config={"api_key": "test-key", "max_tokens": 512},
-        selected_models=["claude-sonnet-4-5"],
+        enabled_models={"claude-sonnet-4-5": {"temperature": 0.1, "max_tokens": 256}},
     )
-    model_config = ModelConfig(_env_file=None, providers_config_dir=config_dir, temperature=0.3)
+    model_config = ModelConfig(_env_file=None, providers_config_dir=config_dir, active_config_file=active_config_file, temperature=0.3)
     provider = ModelProviderFactory(model_config).create("anthropic")
 
     response = await provider.complete(
@@ -164,6 +177,6 @@ async def test_anthropic_complete_converts_system_and_messages(tmp_path: Path):
         {"role": "assistant", "content": "hi"},
         {"role": "user", "content": "again"},
     ]
-    assert kwargs["temperature"] == 0.3
-    assert kwargs["max_tokens"] == 512
+    assert kwargs["temperature"] == 0.1
+    assert kwargs["max_tokens"] == 256
     assert response.usage == {"input_tokens": 3, "output_tokens": 2}

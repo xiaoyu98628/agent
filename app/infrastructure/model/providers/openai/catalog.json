@@ -1,0 +1,23 @@
+{
+  "id": "openai",
+  "name": "OpenAI",
+  "base_url": "https://api.openai.com/v1",
+  "models": [
+    {
+      "id": "gpt-4.1",
+      "name": "GPT-4.1",
+      "reasoning": false,
+      "input": ["text", "image"],
+      "context_window": 1047576,
+      "max_tokens": 32768
+    },
+    {
+      "id": "gpt-4.1-mini",
+      "name": "GPT-4.1 Mini",
+      "reasoning": false,
+      "input": ["text", "image"],
+      "context_window": 1047576,
+      "max_tokens": 32768
+    }
+  ]
+}

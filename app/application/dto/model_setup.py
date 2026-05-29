@@ -15,4 +15,8 @@ class ProviderConfigField:
 class ModelOption:
     id: str
     name: str | None = None
+    reasoning: bool = False
+    input: list[str] = field(default_factory=lambda: ["text"])
+    context_window: int | None = None
+    max_tokens: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

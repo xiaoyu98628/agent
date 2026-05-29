@@ -1,8 +1,17 @@
 {
-  "description": "模型供应商配置现在按 provider 分开保存。默认真实配置文件位于各 provider 包内的 provider_config.json，也可以通过 MODEL_PROVIDERS_CONFIG_DIR 指向外部目录。",
+  "description": "模型供应商按 provider 包自治。catalog.json 是内置模型能力清单，provider_config.json 是用户启用配置；也可以通过 MODEL_PROVIDERS_CONFIG_DIR 指向外部配置目录。",
   "providers": {
-    "openai": "app/infrastructure/model/providers/openai/provider_config.example.json",
-    "zai": "app/infrastructure/model/providers/zai/provider_config.example.json",
-    "anthropic": "app/infrastructure/model/providers/anthropic/provider_config.example.json"
+    "openai": {
+      "catalog": "app/infrastructure/model/providers/openai/catalog.json",
+      "config_example": "app/infrastructure/model/providers/openai/provider_config.example.json"
+    },
+    "zai": {
+      "catalog": "app/infrastructure/model/providers/zai/catalog.json",
+      "config_example": "app/infrastructure/model/providers/zai/provider_config.example.json"
+    },
+    "anthropic": {
+      "catalog": "app/infrastructure/model/providers/anthropic/catalog.json",
+      "config_example": "app/infrastructure/model/providers/anthropic/provider_config.example.json"
+    }
   }
 }

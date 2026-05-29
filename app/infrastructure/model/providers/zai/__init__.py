@@ -1,14 +1,25 @@
+import os
 from pathlib import Path
 
 from openai import AsyncOpenAI
 
 from app.application.dto.chat import ChatRequest, ChatResponse
 from app.application.dto.model_setup import ModelOption, ProviderConfigField
+from app.infrastructure.model.catalog import ProviderCatalog, load_provider_catalog
 from config.model import ConfiguredProvider, ModelConfig, load_configured_provider, save_configured_provider
 
-DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
+DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 PROVIDER_NAME = "zai"
 PROVIDER_CONFIG_FILENAME = "provider_config.json"
+PROVIDER_CATALOG_FILENAME = "catalog.json"
+
+
+def catalog_path() -> Path:
+    return Path(__file__).resolve().parent.joinpath(PROVIDER_CATALOG_FILENAME)
+
+
+def catalog() -> ProviderCatalog:
+    return load_provider_catalog(catalog_path())
 
 
 def provider_config_path(config_dir: Path | None = None) -> Path:
@@ -26,8 +37,8 @@ def save_provider_config(provider: ConfiguredProvider, config_dir: Path | None =
 
 
 def create_provider(config: ModelConfig) -> ZAIClient:
-    return ZAIClient.from_provider_config(
-        provider_config=config.provider_config(PROVIDER_NAME),
+    return ZAIClient.from_provider_setup(
+        provider_setup=config.provider_setup(PROVIDER_NAME),
         default_temperature=config.temperature,
     )
 
@@ -35,11 +46,11 @@ def create_provider(config: ModelConfig) -> ZAIClient:
 def config_fields() -> list[ProviderConfigField]:
     return [
         ProviderConfigField(
-            name="api_key",
-            label="API Key",
+            name="api_key_ref",
+            label="API Key Env",
             required=True,
             secret=True,
-            placeholder="Z.AI API Key",
+            placeholder="ZAI_API_KEY",
         ),
         ProviderConfigField(
             name="base_url",
@@ -62,13 +73,13 @@ async def validate_config(provider_config: dict) -> None:
 
 
 async def list_models(provider_config: dict) -> list[ModelOption]:
-    client = _client_from_provider_config(provider_config)
-    response = await client.models.list()
-    return [ModelOption(id=model.id, name=model.id) for model in response.data]
+    return [model.to_option() for model in catalog().models]
 
 
 def _client_from_provider_config(provider_config: dict) -> AsyncOpenAI:
     api_key = provider_config.get("api_key")
+    if not api_key and provider_config.get("api_key_ref"):
+        api_key = os.getenv(provider_config["api_key_ref"])
     if not api_key:
         raise ValueError("Missing api_key for provider: zai")
 
@@ -82,14 +93,19 @@ class ZAIClient:
         base_url: str = DEFAULT_BASE_URL,
         default_temperature: float | None = None,
         max_tokens: int | None = None,
+        enabled_models: dict[str, dict] | None = None,
     ):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.default_temperature = default_temperature
         self.max_tokens = max_tokens
+        self.enabled_models = enabled_models or {}
 
     @classmethod
-    def from_provider_config(cls, provider_config: dict, default_temperature: float | int | None = None) -> ZAIClient:
+    def from_provider_setup(cls, provider_setup: ConfiguredProvider, default_temperature: float | int | None = None) -> ZAIClient:
+        provider_config = provider_setup.config
         api_key = provider_config.get("api_key")
+        if not api_key and provider_config.get("api_key_ref"):
+            api_key = os.getenv(provider_config["api_key_ref"])
         if not api_key:
             raise ValueError("Missing api_key for provider: zai")
 
@@ -102,6 +118,7 @@ class ZAIClient:
             base_url=provider_config.get("base_url") or DEFAULT_BASE_URL,
             default_temperature=default_temperature,
             max_tokens=max_tokens,
+            enabled_models=provider_setup.enabled_models,
         )
 
     async def complete(self, request: ChatRequest) -> ChatResponse:
@@ -116,14 +133,16 @@ class ZAIClient:
             ],
         }
 
+        model_config = self.enabled_models.get(request.model.name, {})
         temperature = request.temperature
         if temperature is None:
-            temperature = self.default_temperature
+            temperature = model_config.get("temperature", self.default_temperature)
         if temperature is not None:
             kwargs["temperature"] = temperature
 
-        if self.max_tokens is not None:
-            kwargs["max_tokens"] = self.max_tokens
+        max_tokens = model_config.get("max_tokens", self.max_tokens)
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
 
         response = await self.client.chat.completions.create(**kwargs)
         choice = response.choices[0]
